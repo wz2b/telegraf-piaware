@@ -1,0 +1,56 @@
+name: Go
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+
+  build:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v2
+
+    - name: Set up Go
+      uses: actions/setup-go@v2
+      with:
+        go-version: 1.16
+
+    - name: Build
+      run: |
+        go build -v
+
+        ls -lR
+
+    - name: Test
+      run: go test -v
+
+    - name: Deploy
+      uses: actions/upload-artifact@v2
+      with: 
+          name: linux-telegraf-piaware-${{ github.sha }}
+          path: telegraf_piaware
+
+  build2:
+      runs-on: windows-latest
+      steps:
+      - uses: actions/checkout@v2
+
+      - name: Set up Go
+        uses: actions/setup-go@v2
+        with:
+          go-version: 1.16
+
+      - name: Build
+        run: go build -v
+
+      - name: Test
+        run: go test -v
+
+      - name: Deploy
+        uses: actions/upload-artifact@v2
+        with: 
+          name: windows-telegraf-piaware-${{ github.sha }}
+          path: telegraf_piaware.exe
