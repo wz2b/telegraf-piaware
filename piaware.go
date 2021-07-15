@@ -14,6 +14,7 @@ import (
 	"telegraf_piaware/internal/tclogger"
 	"time"
 )
+
 var telegrafLogger = tclogger.Create().Start()
 var localLog log.Logger
 var icao8643 = icao86432.New()
@@ -21,7 +22,6 @@ var icao8643 = icao86432.New()
 func main() {
 	var piawareUrl string
 	var aircraftUrl string
-
 
 	localLog = log.NewLogfmtLogger(log.NewSyncWriter(telegrafLogger))
 	localLog = log.With(localLog, "ts", log.DefaultTimestamp, "caller", log.DefaultCaller)
@@ -32,12 +32,10 @@ func main() {
 	var config = aircraft.Config{
 		Directory:  "c:/work/go/telegraf-piaware",
 		BoltDbFile: "c:/work/go/telegraf-piaware/db",
-		URL: aircraftUrl,
+		URL:        aircraftUrl,
 	}
 
 	flag.Parse()
-
-
 
 	/*
 	 * The aircraft manager gets the initial database, then starts a thread
@@ -55,67 +53,67 @@ func main() {
 	//	URL:       "http://registry.faa.gov/database/ReleasableAircraft.zip",
 	//})
 
+	//err = icao8643.Load()
+	//if err != nil {
+	//	level.Error(localLog).Log("msg", "Unable to fetch ICAO 8643 aircraft type database")
+	//}
 
+	p := piaware.New(m, piawareUrl)
 
+	for {
+		fetch(p)
 
-	err = icao8643.Load()
-	if err != nil {
-		level.Error(localLog).Log("msg", "Unable to fetch ICAO 8643 aircraft type database")
+		time.Sleep( 10 * time.Second)
 	}
-
-	p := piaware.New(m,piawareUrl )
-
-	getData(p)
 }
 
-func getData(p *piaware.Piaware) {
+func fetch(p *piaware.Piaware) {
 
 	report, err := p.GetReport()
 	if err != nil {
 		panic(err)
 	}
 
-
 	if report == nil {
 		level.Info(localLog).Log("msg", "Report was empty")
 		return
-}
-		reportTime := time.Unix(int64(report.Now),0)
+	}
+	reportTime := time.Unix(int64(report.Now), 0)
 
-		var metrics aircraft_metric.AircraftMetricList
+	var metrics aircraft_metric.AircraftMetricList
 
-		for _, a := range report.Aircraft {
-			metric  := aircraftObservationToMetric(a, reportTime)
-			metrics = append(metrics, metric)
-		}
+	for _, a := range report.Aircraft {
+		metric := aircraftObservationToMetric(a, reportTime)
+		metrics = append(metrics, metric)
+	}
 
-		metrics.WriteTo(os.Stdout)
+	metrics.WriteTo(os.Stdout)
 }
 
 func aircraftObservationToMetric(aircraft model.Aircraft, timestamp time.Time) aircraft_metric.AircraftMetric {
-
-	am := aircraft_metric.New("adsb", timestamp)
+	am := aircraft_metric.New("seen", timestamp)
 	am.AddTag("hex", &aircraft.Hex)
-	am.AddTag("type", aircraft.TypeCode)
-	am.AddTag("description", aircraft.Description)
-	am.AddTag("category", aircraft.Category)
-	am.AddTag("registration", aircraft.Registration)
-	am.AddBoolTagIfTrue("military", aircraft.Military)
-	am.AddBoolTagIfTrue("interesting", aircraft.Interesting)
-	am.AddBoolTagIfTrue("pia", aircraft.PIA)
-	am.AddBoolTagIfTrue("ladd", aircraft.LADD)
+	am.AddField("type", aircraft.TypeCode)
+	am.AddField("description", aircraft.Description)
+	am.AddField("category", aircraft.Category)
+	am.AddField("registration", aircraft.Registration)
+	am.AddField("military", aircraft.Military)
+	am.AddField("interesting", aircraft.Interesting)
+	am.AddField("pia", aircraft.PIA)
+	am.AddField("ladd", aircraft.LADD)
+	am.AddField("owner", aircraft.Owner)
+	am.AddField("category", aircraft.Category)
 
 	if icao8643 != nil && aircraft.TypeCode != nil {
-		idata:= icao8643.Get(*aircraft.TypeCode)
+		idata := icao8643.Get(*aircraft.TypeCode)
 		if idata != nil {
-			am.AddTag("icao_description",idata.AircraftDescription)
-			am.AddTag("icao_manufacturer", idata.ManufacturerCode)
-			am.AddTag("icao_model", idata.ModelFullName)
-			am.AddTag("icao_engine_count", idata.EngineCount)
-			am.AddTag("icao_engine_type", idata.EngineType)
+			am.AddField("icao_description", idata.AircraftDescription)
+			am.AddField("icao_manufacturer", idata.ManufacturerCode)
+			am.AddField("icao_model", idata.ModelFullName)
+			am.AddField("icao_engine_count", idata.EngineCount)
+			am.AddField("icao_engine_type", idata.EngineType)
 		}
 	}
-
 
 	am.AddField("lat", aircraft.Lat)
 	am.AddField("lng", aircraft.Lon)
@@ -128,10 +126,5 @@ func aircraftObservationToMetric(aircraft model.Aircraft, timestamp time.Time) a
 	am.AddField("rssi", aircraft.Rssi)
 	am.AddField("ground_speed", aircraft.GroundSpeed)
 
-
-
-
-
 	return am
 }
-
